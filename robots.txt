@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://skikkh.github.io/sitemap.xml
