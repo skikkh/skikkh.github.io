@@ -321,6 +321,8 @@ body.lost #stage{filter:grayscale(.75) brightness(.75)}
 /* danmaku, disco floor, board stunts, PREMIUM blackout, RUSH */
 .dm{position:fixed;left:100%;z-index:47;pointer-events:none;white-space:nowrap;font-family:var(--f-display);font-size:clamp(16px,3.4vw,28px);line-height:1;text-shadow:0 0 2px #000,0 0 2px #000,0 2px 0 #000;opacity:.92;animation:dm var(--dur,4s) linear forwards}
 .dm.big{font-size:clamp(26px,6vw,52px)}
+/* Dela Gothic One は「ﾟ」「∀」が豆腐なので、その文字だけ端末の標準ゴシックで描く */
+.dm .sym{font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","Meiryo","Noto Sans CJK JP","Noto Sans JP",sans-serif;font-weight:900}
 @keyframes dm{to{transform:translateX(calc(-100vw - 100%))}}
 .cell.disco{animation:disco .45s ease-out}
 @keyframes disco{0%{box-shadow:inset 0 0 0 100px var(--dc)}100%{box-shadow:inset 0 0 0 100px transparent}}
@@ -533,6 +535,14 @@ legend{padding:0;margin-bottom:8px;font-family:var(--f-display);font-size:13px;l
         </div>
       </fieldset>
     </div>
+    <fieldset>
+      <legend>声</legend>
+      <div class="seg">
+        <div class="segopt"><input class="sr" type="radio" name="voice" id="vc1" value="girl"><label for="vc1">女の子</label></div>
+        <div class="segopt"><input class="sr" type="radio" name="voice" id="vc2" value="male"><label for="vc2">男</label></div>
+        <div class="segopt"><input class="sr" type="radio" name="voice" id="vc3" value="off"><label for="vc3">なし</label></div>
+      </div>
+    </fieldset>
     <button class="go" id="goBtn" type="button">スタート!!</button>
     <p class="warn">フラッシュ・画面の揺れ・音が出ます。苦手な人は演出を「ひかえめ」に。</p>
   </div>
@@ -812,7 +822,7 @@ const LV=[null,
 
 /* ---------- storage (per-viewer convenience only) ---------- */
 const KEY='dopa-osero-v1';
-const STORE={level:3,side:'first',fx:null,fxv:2,snd:2,rec:{},streak:0,best:{}};
+const STORE={level:3,side:'first',fx:null,fxv:2,snd:2,voice:'girl',rec:{},streak:0,best:{}};
 try{const j=JSON.parse(localStorage.getItem(KEY)||'null');if(j&&typeof j==='object')Object.assign(STORE,j);}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(STORE));}catch(e){}}
 // v1 saved an auto-chosen effects level; pick it again once
@@ -833,7 +843,7 @@ function counts(){let b=0,w=0;for(let i=0;i<64;i++){if(S.board[i]===1)b++;else i
 
 /* ---------- sound (WebAudio synth, starts after a tap) ---------- */
 const SND=(()=>{
-  let ctx=null,sfx,bgm,nb,mode=STORE.snd,fever=false,timer=null,step=0,nextT=0;
+  let ctx=null,sfx,bgm,voice,nb,mode=STORE.snd,fever=false,timer=null,step=0,nextT=0,hardDuck=false;
   const kicks=[];
   const mtof=m=>440*Math.pow(2,(m-69)/12);
   function init(){
@@ -845,6 +855,7 @@ const SND=(()=>{
       const master=ctx.createGain();master.gain.value=.6;master.connect(comp);comp.connect(ctx.destination);
       sfx=ctx.createGain();sfx.connect(master);
       bgm=ctx.createGain();bgm.gain.value=.5;bgm.connect(master);
+      voice=ctx.createGain();voice.gain.value=1.5;voice.connect(master);
       nb=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);const d=nb.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
     }catch(e){ctx=null;}
   }
@@ -908,7 +919,11 @@ const SND=(()=>{
     popBeats(){if(!ctx||!timer)return -1;let n=0;while(kicks.length&&kicks[0]<=ctx.currentTime){kicks.shift();n++;}return n;},
     airhorn(){const t=now();for(const [d,L] of [[0,.2],[.26,.13],[.45,.6]])for(const f of [349,440,523,587])tone(f,L,{type:'sawtooth',vol:.045,at:t+d,lp:2600,to:f*.94,slide:L,a:.012,sus:true});},
     premium(){const t=now();tone(880,1.8,{type:'sine',vol:.22,at:t,sus:true});tone(1320,1.8,{type:'sine',vol:.1,at:t+.03,sus:true});},
-    duck(on){if(ctx&&bgm)bgm.gain.setTargetAtTime(on?0:.5,ctx.currentTime,.05);},
+    duck(on){hardDuck=on;if(ctx&&bgm){bgm.gain.cancelScheduledValues(ctx.currentTime);bgm.gain.setTargetAtTime(on?0:.5,ctx.currentTime,.05);}},
+    // BGM steps back while a voice clip plays (not during the PREMIUM silence)
+    duckFor(at,d){if(!ctx||!bgm||hardDuck)return;bgm.gain.cancelScheduledValues(at);bgm.gain.setTargetAtTime(.16,at,.03);bgm.gain.setTargetAtTime(.5,at+d,.25);},
+    get ctx(){return ctx;},
+    get voiceBus(){return voice;},
     reelTick(){tone(1800,.02,{type:'square',vol:.018});},
     reelStop(){tone(160,.12,{type:'square',vol:.12,lp:1200});noise(.06,{ft:'lowpass',ff:3000,vol:.2});},
     slash(){noise(.25,{ft:'highpass',ff:2500,vol:.3});tone(3000,.2,{type:'sawtooth',to:300,slide:.18,vol:.06,lp:6000});},
@@ -937,16 +952,52 @@ const SND=(()=>{
 })();
 
 /* ---------- spoken callouts (only with a Japanese voice installed) ---------- */
+// Irodori-TTS clips shipped in voice.js (window.DOPA_VOICE: id -> base64 MP3).
+// Two channels: the announcer cuts itself off; a CPU line waits until the announcer has finished.
 const VOICE=(()=>{
-  const ok=typeof window.speechSynthesis!=='undefined'&&typeof window.SpeechSynthesisUtterance!=='undefined';
-  let v=null;
-  function pickV(){try{v=speechSynthesis.getVoices().find(x=>/^ja/i.test(x.lang))||null;}catch(e){}}
-  if(ok){pickV();try{speechSynthesis.addEventListener('voiceschanged',pickV);}catch(e){}}
-  return{say(t){
-    if(!ok||!v||SND.mode===0||S.fx!=='max')return;
-    try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='ja-JP';u.voice=v;u.rate=1.3;u.pitch=1.7;speechSynthesis.speak(u);}catch(e){}
-  }};
+  // 声は 女の子(voice-girl.js) / 男(voice-male.js) / なし を切り替え。選んだ方だけ読み込む
+  const FILE={girl:'voice-girl.js',male:'voice-male.js'},VAR={girl:'DOPA_VOICE_GIRL',male:'DOPA_VOICE_MALE'};
+  const bufs=new Map(),pending={};let annSrc=null,cpuSrc=null,annEnd=0;
+  const kind=()=>STORE.voice==='male'||STORE.voice==='off'?STORE.voice:'girl';
+  function load(k=kind(),cb){
+    if(k==='off')return;
+    if(window[VAR[k]]){if(cb)cb();return;}
+    if(pending[k]){if(cb)pending[k].push(cb);return;}
+    pending[k]=cb?[cb]:[];
+    const sc=document.createElement('script');sc.src=FILE[k];sc.async=true;
+    sc.onload=()=>{const l=pending[k]||[];pending[k]=null;l.forEach(f=>f());};
+    sc.onerror=()=>{pending[k]=null;};
+    document.head.append(sc);
+  }
+  const raw=id=>{const k=kind();if(k==='off')return null;const d=window[VAR[k]];return d&&d[id];};
+  function decode(id){
+    const key=kind()+':'+id;
+    if(bufs.has(key))return bufs.get(key);
+    const b64=raw(id),ctx=SND.ctx;
+    if(!b64||!ctx)return Promise.resolve(null);
+    const p=new Promise(res=>{
+      try{const bin=atob(b64),u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);ctx.decodeAudioData(u8.buffer,res,()=>res(null));}
+      catch(e){res(null);}
+    });
+    bufs.set(key,p);return p;
+  }
+  function play(id,chan){
+    if(SND.mode===0||!raw(id))return;
+    SND.init();const ctx=SND.ctx;if(!ctx)return;
+    decode(id).then(buf=>{
+      if(!buf||SND.mode===0||!SND.voiceBus)return;
+      const now=ctx.currentTime;let at=now;
+      if(chan==='ann'){if(annSrc){try{annSrc.stop();}catch(e){}}}
+      else{if(cpuSrc){try{cpuSrc.stop();}catch(e){}}at=Math.max(now,annEnd+.05);}
+      const src=ctx.createBufferSource();src.buffer=buf;src.connect(SND.voiceBus);src.start(at);
+      if(chan==='ann'){annSrc=src;annEnd=at+buf.duration;}else cpuSrc=src;
+      SND.duckFor(at,buf.duration);
+    });
+  }
+  return{load,say(key){play('ann_'+key,'ann');},cpu(level,key,i){play(`lv${level}_${key}_${i}`,'cpu');}};
 })();
+// cut-in headline -> announcer clip
+const MAINVOICE={'神の一手':'kami','超激アツ!!!':'chogekiatsu','激アツ!!':'gekiatsu','ナイス!!':'nice','角ゲット!!':'kado','逆転!!':'gyakuten','チャンスマス!!':'chance'};
 
 /* ---------- background: rotating sunburst rays ---------- */
 const BG=(()=>{
@@ -1236,7 +1287,8 @@ function danmaku(kind,n){
   if(S.fx!=='max'||!DM[kind])return;
   for(let i=0;i<n;i++)setTimeout(()=>{
     if(document.querySelectorAll('.dm').length>45)return;
-    const el=document.createElement('div');el.className='dm'+(Math.random()<.2?' big':'');el.textContent=pick(DM[kind]);
+    const el=document.createElement('div');el.className='dm'+(Math.random()<.2?' big':'');
+    for(const part of pick(DM[kind]).split(/([ﾟ∀])/)){if(!part)continue;if(/[ﾟ∀]/.test(part)){const sp=document.createElement('span');sp.className='sym';sp.textContent=part;el.append(sp);}else el.append(part);}
     el.style.top=(4+Math.random()*84).toFixed(1)+'vh';el.style.setProperty('--dur',(3.2+Math.random()*2.6).toFixed(2)+'s');el.style.color=pick(DMC);
     document.body.append(el);el.addEventListener('animationend',()=>el.remove());
   },i*(40+Math.random()*120));
@@ -1254,7 +1306,7 @@ function onBeat(){
 function freeze(on,reveal){document.body.classList.toggle('freeze',on);document.body.classList.toggle('freeze2',!!reveal);}
 function startRush(){
   S.rush+=5;BG.setFever(true);SND.setFever(true);LED.base();gauge();
-  toast('ドパラッシュ突入!! 5ターン');VOICE.say('ラッシュ突入!');danmaku('huge',14);SND.airhorn();
+  toast('ドパラッシュ突入!! 5ターン');VOICE.say('rush');danmaku('huge',14);SND.airhorn();
 }
 function zoomAt(c){
   if(S.fx!=='max')return;
@@ -1265,7 +1317,7 @@ function zoomAt(c){
 function charge(c){
   return new Promise(res=>{
     const el=$('#charge');el.style.setProperty('--cx',c.x+'px');el.style.setProperty('--cy',c.y+'px');
-    document.body.classList.add('charge');SND.heart();SND.riser();
+    document.body.classList.add('charge');SND.heart();SND.riser();VOICE.say('kuru');
     setTimeout(()=>{document.body.classList.remove('charge');res();},760);
   });
 }
@@ -1290,7 +1342,7 @@ function makeCounter(c,big){
 let sayT=0;
 function say(key){
   const L=LV[S.level]&&LV[S.level].lines[key];if(!L)return;
-  const b=$('#bubble');b.textContent=pick(L);b.classList.add('show');
+  const i=(Math.random()*L.length)|0,b=$('#bubble');b.textContent=L[i];b.classList.add('show');VOICE.cpu(S.level,key,i);
   clearTimeout(sayT);sayT=setTimeout(()=>b.classList.remove('show'),2600);
 }
 function status(kind){
@@ -1349,7 +1401,7 @@ const SLOT=(()=>{
     msg.textContent=`${prem?'PREMIUM':'大当たり!!'} +${pay.toLocaleString('en-US')}`;
     const r=box.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;
     cutin(prem?'PREMIUM 神神神!!':`${SYMS[a]}${SYMS[a]}${SYMS[a]} 大当たり!!`,'rainbow',`+${pay.toLocaleString('en-US')}`,prem?2000:1500);
-    VOICE.say(prem?'プレミアム! 神降臨!':a===1?'神降臨! 大当たり!':'大当たり!');
+    VOICE.say(prem?'premium':a===1?'kamikourin':'ooatari');
     danmaku('huge',prem?30:18);SND.airhorn();FX.kanji(x,y,30);FX.glitch(12);if(prem)boardSpin('spin');
     SND.jackpot();flash('#ffffff',.45);invert();FX.shake(22);BG.bump(1.5);LED.set('rainbow',2500);speedLines();
     FX.coins(x,y,90,1.4);FX.confetti(160);FX.storm(3);FX.ring(x,y,10,Math.max(innerWidth,innerHeight)*.7,50,14,36);
@@ -1364,7 +1416,7 @@ const SLOT=(()=>{
     CH=reels[0].r.clientHeight||60;for(const rl of reels){rl.strip.style.setProperty('--ch',CH+'px');rl.spd=0;rl.stop=null;rl.pos=1;}render();
     SND.duck(true);freeze(true);
     await wait(1400);if(g!==GEN){freeze(false);SND.duck(false);return hide();}
-    freeze(true,true);SND.premium();VOICE.say('プレミアム');
+    freeze(true,true);SND.premium();VOICE.say('premium_w');
     await wait(1500);freeze(false);SND.duck(false);if(g!==GEN)return hide();
     const pay=1000000*(S.rush>0?2:1);S.score+=pay;jackpot(1,pay,true);
     await wait(1900);if(g!==GEN)return hide();
@@ -1393,7 +1445,7 @@ const SLOT=(()=>{
     if(reach){
       el.classList.add('reach');el.dataset.c=color;
       msg.textContent=color==='rainbow'?'虹リーチ!! 確定!!':'リーチ!!';
-      VOICE.say(color==='rainbow'?'確定!':'リーチ!');
+      VOICE.say(color==='rainbow'?'kakutei':'reach');
       SND.riser();SND.heart();FX.shake(6);BG.bump(.6);LED.set(color==='rainbow'?'rainbow':'hot',2400);danmaku('slot',color==='rainbow'?14:6);
       reels[1].spd=7;
       await wait(color==='rainbow'?500:1000);if(g!==GEN)return hide();
@@ -1418,7 +1470,7 @@ function setRank(i){S.rank=i;const el=$('#rank');el.textContent=RANKS[i][1];el.c
 function rankCheck(v){
   const i=rankOf(v);
   if(i>S.rank&&S.phase==='play'){
-    setRank(i);toast(`RANK UP!! ${RANKS[i][1]}`);VOICE.say('ランクアップ!');SND.start();FX.confetti(60);LED.set('rainbow',1200);
+    setRank(i);toast(`RANK UP!! ${RANKS[i][1]}`);VOICE.say('rankup');SND.start();FX.confetti(60);LED.set('rainbow',1200);
   }
 }
 function toast(t){const el=$('#toast');el.textContent=t;restart(el,'run');}
@@ -1585,12 +1637,12 @@ function celebrate(sq,me,n,actor,before,mult,lucky,crit){
     if(flipped){if(main&&style!=='mini')sub+=' ＋逆転';else{main='逆転!!';style='hot';sub='形勢ひっくり返した';}}
     if(lucky){if(main&&style!=='mini')sub+=' ＋チャンス×5';else{main='チャンスマス!!';style='gold';sub='SCORE ×5';dur=1200;}}
     if(main&&S.combo>=2)sub+=` ${S.combo}連鎖`;
-    if(main){cutin(main,style,sub.trim(),dur);VOICE.say(main);}
+    if(main){cutin(main,style,sub.trim(),dur);VOICE.say(MAINVOICE[main]);}
     if(n>=7)danmaku('huge',14+n);else if(n>=3||corner||lucky||crit)danmaku('good',3+n*2);else if(Math.random()<.4)danmaku('good',1+((Math.random()*2)|0));
     if(n>=5||corner)SND.airhorn();
     if(n>=5)FX.kanji(c.x,c.y,10+n*2);
     if(n>=7)FX.glitch(18);
-    else if(crit)VOICE.say('クリティカル!');
+    else if(crit)VOICE.say('critical');
     if(crit){slash(c.x,c.y);SND.slash();floatText(c.x,c.y-c.s*1.9,'CRITICAL!! ×2','crit');FX.shake(14);flash('#ffffff',.25);}
     // the slot spins while the CPU thinks
     S.slotQ={n,lucky,corner};
@@ -1632,7 +1684,7 @@ function celebrate(sq,me,n,actor,before,mult,lucky,crit){
         S.fever=3;S.feverCount=(S.feverCount||0)+1;
         const fn=['確変突入!!','超確変!!','神確変!!!'][Math.min(S.feverCount,3)-1];
         later(main?dur+150:350,()=>{
-          cutin(fn,'fever','FEVER 3ターン スコア×3',1500);SND.feverOn();VOICE.say(fn+' フィーバー!');danmaku('huge',16);SND.airhorn();flash('#ff2bd6',.35);invert();
+          cutin(fn,'fever','FEVER 3ターン スコア×3',1500);SND.feverOn();VOICE.say(['fever1','fever2','fever3'][Math.min(S.feverCount,3)-1]);danmaku('huge',16);SND.airhorn();flash('#ff2bd6',.35);invert();
           BG.setFever(true);BG.bump(1.4);SND.setFever(true);speedLines();FX.confetti(120);FX.shake(16);FX.storm(3);LED.base();gauge();
         });
       }
@@ -1646,7 +1698,7 @@ function celebrate(sq,me,n,actor,before,mult,lucky,crit){
     floatText(c.x,c.y-c.s*.6,'+'+n,'small cpu');
     if(corner||n>=4){
       const big=n>=8;
-      cutin(corner?'角取られた!!':big?'大ピンチ!!!':'ピンチ!!','danger',corner?'DANGER':`${n}枚 持っていかれた`,1100);VOICE.say(corner?'角取られた!':'ピンチ!');
+      cutin(corner?'角取られた!!':big?'大ピンチ!!!':'ピンチ!!','danger',corner?'DANGER':`${n}枚 持っていかれた`,1100);VOICE.say(corner?'kadotorareta':'pinch');
       SND.alarm();flash('#ff2f4f',big?.4:.28);FX.shake(big?18:11);LED.set('danger',1400);rgbSplit();FX.glitch(10);danmaku('bad',corner||big?10:5);
       hanko(hx,hy,corner?'角':'危',c.s*1.4,'cpu');SND.taiko();
       if(corner||big){FX.crack(c.x,c.y,c.s*(corner?4:3));SND.glass();}
@@ -1756,7 +1808,7 @@ function newGame(){
   SND.init();SND.start();SND.bgmStart();
   cutin('START!!','rainbow',`VS ${LV[S.level].name} ／ あなたは${S.human===1?'先手 黒':'後手 白'}`,1100);
   BG.bump(.9);FX.confetti(60);LED.set('rainbow',1200);
-  say('start');VOICE.say('スタート!');danmaku('start',10);
+  say('start');VOICE.say('start');danmaku('start',10);
   later(1000,nextTurn);
 }
 function startDemo(){
@@ -1783,7 +1835,7 @@ function endGame(){
   SND.bgmStop();
   later(700,()=>{
     if(r==='win'){
-      SND.fanfare();later(900,SND.airhorn);VOICE.say(cpu===0?'パーフェクト!':'勝利! おめでとう!');danmaku('win',30);
+      SND.fanfare();later(900,SND.airhorn);VOICE.say(cpu===0?'perfect':'win');danmaku('win',30);
       cutin(cpu===0?'パーフェクト!!':'勝利!!','rainbow',`${you} - ${cpu}`,1900);
       flash('#ffffff',.45);invert();speedLines();FX.shake(18);BG.bump(1.6);BG.setFever(true);LED.set('rainbow',6000);
       FX.confetti(180);later(600,()=>FX.confetti(140));later(1200,()=>FX.confetti(140));
@@ -1791,7 +1843,7 @@ function endGame(){
       for(let k=0;k<12;k++)later(200+k*330,()=>{FX.firework(innerWidth*(.1+Math.random()*.8),innerHeight*(.1+Math.random()*.45),Math.random()*360);SND.firework();});
       say('cpuLose');
     }else if(r==='lose'){
-      SND.boom();SND.glass();later(500,SND.lose);VOICE.say('残念…');danmaku('lose',20);FX.glitch(20);document.body.classList.add('lost');
+      SND.boom();SND.glass();later(500,SND.lose);VOICE.say('lose');danmaku('lose',20);FX.glitch(20);document.body.classList.add('lost');
       FX.crack(innerWidth/2,innerHeight*.45,Math.max(innerWidth,innerHeight)*.55);FX.shake(20);flash('#ff2f4f',.3);LED.set('danger',3000);
       cutin('敗北…','lose',`${you} - ${cpu}`,1700);say('cpuWin');
     }else{
@@ -1823,7 +1875,7 @@ function showResult(r,you,cpu){
     const k=Math.min(1,(nw-t0)/D);rp.textContent=Math.round(target*(1-Math.pow(1-k,3))).toLocaleString('en-US');
     if(k<1&&!$('#result').hidden){if(nw-lastTick>55){lastTick=nw;SND.reelTick();}requestAnimationFrame(tally);return;}
     rp.textContent=target.toLocaleString('en-US');restart(rp,'bump');
-    if(S.newRecord&&target>0){$('#rNew').hidden=false;SND.jackpot();FX.confetti(120);LED.set('rainbow',3000);VOICE.say('新記録!');}
+    if(S.newRecord&&target>0){$('#rNew').hidden=false;SND.jackpot();FX.confetti(120);LED.set('rainbow',3000);VOICE.say('record');}
   })(t0);
 }
 function undo(){
@@ -1868,6 +1920,7 @@ function buildLevels(){
 function syncSetup(){
   for(const r of document.querySelectorAll('input[name=side]'))r.checked=r.value===STORE.side;
   for(const r of document.querySelectorAll('input[name=fx]'))r.checked=r.value===S.fx;
+  for(const r of document.querySelectorAll('input[name=voice]'))r.checked=r.value===(STORE.voice||'girl');
 }
 function openSetup(fromGame){
   buildLevels();syncSetup();
@@ -1935,6 +1988,8 @@ $('#goBtn').addEventListener('click',()=>{
 });
 for(const r of document.querySelectorAll('input[name=side]'))r.addEventListener('change',()=>{STORE.side=r.value;save();});
 for(const r of document.querySelectorAll('input[name=fx]'))r.addEventListener('change',()=>setFx(r.value));
+// 声を選び直すと、その声で「スタート！！」を試聴
+for(const r of document.querySelectorAll('input[name=voice]'))r.addEventListener('change',()=>{STORE.voice=r.value;save();if(r.value==='off')return;SND.init();VOICE.load(r.value,()=>VOICE.say('start'));});
 $('#setupClose').addEventListener('click',()=>{$('#setup').hidden=true;});
 $('#rAgain').addEventListener('click',newGame);
 $('#rSetup').addEventListener('click',()=>{openSetup(false);startDemo();});
@@ -1945,7 +2000,7 @@ document.addEventListener('pointerdown',()=>{SND.init();if(S.phase==='play')SND.
 /* ---------- boot (keeps a game in progress across live updates) ---------- */
 function snap(){return{game:S.phase==='play'?S.stable:null};}
 function boot(data){
-  setFx(S.fx);setSnd(STORE.snd);buildLevels();syncSetup();
+  setFx(S.fx);setSnd(STORE.snd);buildLevels();syncSetup();VOICE.load();
   BG.start();FX.start();
   const g=data&&data.game;
   if(g&&Array.isArray(g.board)&&g.board.length===64){
