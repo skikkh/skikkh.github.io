@@ -3,6 +3,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      paypay_url:
+        description: '新しいPayPayリンク（更新しない場合は空欄）'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -12,7 +17,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  update-paypay:
+    if: github.event_name == 'workflow_dispatch' && inputs.paypay_url != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: write
+    outputs:
+      commit_sha: ${{ steps.update.outputs.commit_sha }}
+    steps:
+      - name: 更新処理を取得
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          persist-credentials: false
+      - name: PayPayリンクを更新
+        id: update
+        env:
+          PAYPAY_URL: ${{ inputs.paypay_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/update-paypay.py
   publish:
+    needs: update-paypay
+    if: ${{ always() && !cancelled() && (needs.update-paypay.result == 'success' || needs.update-paypay.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -26,6 +53,7 @@ jobs:
       - name: 公開ファイルを取得
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ needs.update-paypay.outputs.commit_sha || github.sha }}
           persist-credentials: false
       - name: Pagesを設定
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
