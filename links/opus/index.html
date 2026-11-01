@@ -18,11 +18,12 @@
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
+  <script>try{if(localStorage.getItem("passport-paper")==="classic")document.documentElement.dataset.paper="classic"}catch(e){}</script>
   <script>(function(d){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;d.classList.add('passport-intro');setTimeout(function(){if(!d.dataset.introReady)d.classList.remove('passport-intro')},6000)})(document.documentElement);</script>
-  <script type="module" crossorigin src="/assets/opus-BTxYwgDq.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-P2Xu9kJm.js">
-  <link rel="modulepreload" crossorigin href="/assets/paypay-link-eGS4XES-.js">
-  <link rel="stylesheet" crossorigin href="/assets/opus-N9vFVLen.css">
+  <script type="module" crossorigin src="/assets/modulepreload-polyfill-P2Xu9kJm.js"></script>
+  <script type="module" crossorigin src="/assets/paypay-link-eGS4XES-.js"></script>
+  <script type="module" crossorigin src="/assets/passport-contact-Bt_XJzM0.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/passport-contact-Zxanq1QS.css">
 </head>
 <body>
   <svg class="svg-defs" width="0" height="0" aria-hidden="true" focusable="false">
@@ -57,7 +58,6 @@
         <g stroke="#6f80b2" stroke-width=".6"><path id="pp-curl" d="M-6 268C22 256 42 228 68 212c22-14 48-10 56 6 6 13-4 26-16 24-10-2-12-14-4-18"/><use href="#pp-curl" transform="translate(5 7)" stroke-width=".35"/><use href="#pp-curl" transform="translate(10 14)" stroke-width=".3"/><path d="M68 212l-5-6m11 1-2-7m10 4 1-7m8 5 4-6m6 7 6-4" stroke-width=".45"/></g>
         <g stroke="#8f88c4" stroke-width=".35"><circle cx="286" cy="14" r="3"/><path d="M281 14h10M286 9v10"/><circle cx="14" cy="276" r="3"/><path d="M9 276h10M14 271v10"/></g>
       </g>
-      <g fill="#8f88c4" font-family="PassportMono,monospace" font-size="3" letter-spacing=".8"><text x="8" y="12">PERSONAL EDITION · 個人版 · PERSONAL EDITION · 個人版 · PERSONAL EDITION · 個人版</text><text x="8" y="292">03 · SKIKKH.GITHUB.IO · 03 · SKIKKH.GITHUB.IO · 03 · SKIKKH.GITHUB.IO</text></g>
     </symbol>
   </svg>
   <main class="passport-layout">
@@ -104,7 +104,7 @@
           <div class="identity-page">
             <article class="identity-content">
               <svg class="page-print" aria-hidden="true" focusable="false"><use href="#print-art" width="100%" height="100%"/></svg>
-              <header class="identity-heading"><dl class="document-data"><div><dt>型 / Type</dt><dd>P</dd></div><div><dt>発行国 / Issuing country</dt><dd>JPN</dd></div><div><dt>旅券番号 / Passport No.</dt><dd><button class="document-number" id="inner-open" type="button" aria-label="Passport number TR4081936" aria-controls="inner-cover" aria-expanded="false" disabled>TR4081936</button></dd></div></dl><button id="replay" class="replay" type="button" hidden>Replay <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8a8 8 0 1 0 1 7M19 3v5h-5"/></svg></button></header>
+              <header class="identity-heading"><dl class="document-data"><div><dt>型 / Type</dt><dd>P</dd></div><div><dt>発行国 / Issuing country</dt><dd><button class="document-number" id="paper-toggle" type="button" aria-label="JPN: switch paper colours" aria-pressed="false">JPN</button></dd></div><div><dt>旅券番号 / Passport No.</dt><dd><button class="document-number" id="inner-open" type="button" aria-label="Passport number TR4081936" aria-controls="inner-cover" aria-expanded="false" disabled>TR4081936</button></dd></div></dl><button id="replay" class="replay" type="button" hidden>Replay <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8a8 8 0 1 0 1 7M19 3v5h-5"/></svg></button></header>
               <div class="portrait-panel"><figure class="id-photo">
                 <img src="/assets/portrait-photo-20261101.jpg" width="1024" height="1024" alt="Ikki Shoka, dressed in white, leaning on folded arms" fetchpriority="high" decoding="async" />
               </figure><h1 class="page-name"><span>Ikki</span><strong>Shoka.</strong></h1></div>
@@ -202,7 +202,7 @@
       <p id="qr-instructions" lang="ja">読み取って、連絡先をひらく。</p>
     </header>
     <figure class="qr-code-plate">
-      <div class="qr-paper"><img src="/assets/contact-qr-paper.svg" width="280" height="280" alt="QR code for https://skikkh.github.io/links/" /></div>
+      <div class="qr-paper"><img id="qr-image" src="/assets/contact-qr-paper.svg" width="280" height="280" alt="QR code for https://skikkh.github.io/links/" /></div>
       <figcaption><span>SCAN TO OPEN</span><span>QR / 01</span></figcaption>
     </figure>
     <div class="qr-destination">
